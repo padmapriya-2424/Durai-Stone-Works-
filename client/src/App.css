@@ -1,0 +1,20 @@
+.readiness-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.readiness-screen h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.readiness-screen p {
+  margin: 0;
+}

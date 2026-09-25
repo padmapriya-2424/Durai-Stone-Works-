@@ -1,0 +1,9 @@
+node_modules/
+.env
+dist/
+.DS_Store
+.env.*
+!.env.example 
+client/.vite/
+server/coverage/
+*.log
