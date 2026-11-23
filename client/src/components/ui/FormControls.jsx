@@ -38,12 +38,23 @@ export function Select({ children, error, hint, label, name, required, ...props 
   )
 }
 
-export function Choice({ checked, children, name, type = 'checkbox', ...props }) {
+export function Choice({ checked, children, name, type = 'checkbox', error, ...props }) {
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-charcoal-soft">
-      <input checked={checked} className="h-4 w-4 accent-brown" name={name} type={type} {...props} />
-      {children}
-    </label>
+    <div>
+      <label className="inline-flex items-center gap-2 text-sm text-charcoal-soft">
+        <input
+          aria-describedby={error ? `${name}-error` : undefined}
+          aria-invalid={Boolean(error)}
+          checked={checked}
+          className="h-4 w-4 accent-brown"
+          name={name}
+          type={type}
+          {...props}
+        />
+        {children}
+      </label>
+      {error ? <p className="mt-2 text-sm text-[#9c493d]" id={`${name}-error`}>{error}</p> : null}
+    </div>
   )
 }
 

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from './ui/Button'
 import { Choice, FileUpload, Input, Select, Textarea } from './ui/FormControls'
-import { getProductById } from '../data/productData'
+import { createEnquiry, mapCustomOrderEnquiry } from '../services/enquiryService'
+import { getProductById } from '../services/productService'
 
 const initialForm = { fullName: '', email: '', phone: '', contactMethod: '', projectType: '', stone: '', height: '', width: '', depth: '', unit: 'cm', quantity: '1', budget: '', deliveryDate: '', description: '', consent: false, whatsappPreference: false }
 const projectTypes = ['Deity Sculpture', 'Temple Sculpture', 'Custom Statue', 'Architectural Stonework', 'Decorative Stone Carving', 'Monument', 'Restoration', 'Other']
@@ -13,15 +14,29 @@ const maxFileSize = 5 * 1024 * 1024
 
 function CustomOrderForm() {
   const [searchParams] = useSearchParams()
-  const product = getProductById(searchParams.get('product'))
+  const slug = searchParams.get('product')
+  const [product, setProduct] = useState(null)
   const [form, setForm] = useState(initialForm)
   const [errors, setErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
   const [files, setFiles] = useState([])
   const [fileError, setFileError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const submittingRef = useRef(false)
   const filesRef = useRef([])
   const minDate = useMemo(() => new Date().toISOString().split('T')[0], [])
+
+  useEffect(() => {
+    if (!slug) return undefined
+
+    const controller = new AbortController()
+    getProductById(slug, controller.signal)
+      .then(setProduct)
+      .catch(() => setProduct(null))
+
+    return () => controller.abort()
+  }, [slug])
 
   useEffect(() => {
     filesRef.current = files
@@ -71,9 +86,22 @@ function CustomOrderForm() {
 
   function handleSubmit(event) {
     event.preventDefault()
+    if (submittingRef.current) return
     if (!validate()) return
+
+    submittingRef.current = true
     setIsSubmitting(true)
-    window.setTimeout(() => { setIsSubmitting(false); setIsSubmitted(true) }, 500)
+    setSubmitError('')
+
+    const payload = mapCustomOrderEnquiry(form, files, product?._id || null)
+
+    createEnquiry(payload)
+      .then(() => setIsSubmitted(true))
+      .catch((error) => setSubmitError(error.message))
+      .finally(() => {
+        submittingRef.current = false
+        setIsSubmitting(false)
+      })
   }
 
   if (isSubmitted) return <SuccessState onReset={() => { setForm(initialForm); setFiles([]); setErrors({}); setIsSubmitted(false) }} />
@@ -86,12 +114,23 @@ function CustomOrderForm() {
       <fieldset className="space-y-5 border-t border-sandstone-200 pt-10"><legend className="font-display text-3xl text-charcoal">Reference Images</legend><FileUpload accept=".jpg,.jpeg,.png,.webp" error={fileError} hint="JPG, JPEG, PNG, or WEBP. Maximum 5 MB per file, up to 5 files." label="Reference images or sketches" multiple name="references" onChange={handleFiles} />{files.length ? <div className="grid gap-3 sm:grid-cols-2">{files.map((item, index) => <div className="flex min-w-0 items-center gap-3 border border-sandstone-200 p-3" key={`${item.file.name}-${index}`}><img alt="Selected reference preview" className="h-16 w-16 rounded-sm object-cover" src={item.preview} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-charcoal">{item.file.name}</p><p className="text-xs text-charcoal-soft">{(item.file.size / 1024 / 1024).toFixed(2)} MB</p></div><button aria-label={`Remove ${item.file.name}`} className="min-h-10 px-2 text-sm font-semibold text-brown hover:text-charcoal" type="button" onClick={() => removeFile(index)}>Remove</button></div>)}</div> : null}</fieldset>
       <fieldset className="space-y-4 border-t border-sandstone-200 pt-10"><legend className="font-display text-3xl text-charcoal">Your Preference</legend><div><Choice checked={form.consent} name="consent" required onChange={(event) => updateField('consent', event.target.checked)}>I agree to be contacted regarding this enquiry.</Choice>{errors.consent ? <p className="mt-2 text-sm text-[#9c493d]" id="consent-error">{errors.consent}</p> : null}</div><Choice checked={form.whatsappPreference} name="whatsappPreference" onChange={(event) => updateField('whatsappPreference', event.target.checked)}>I would prefer to continue this enquiry on WhatsApp.</Choice></fieldset>
       <div className="flex flex-col gap-3 border-t border-sandstone-200 pt-8 sm:flex-row"><Button loading={isSubmitting} type="submit">Submit Enquiry</Button><Button type="button" variant="secondary" onClick={() => { updateField('contactMethod', 'WhatsApp'); document.querySelector('[name="contactMethod"]')?.focus() }}>Prefer WhatsApp</Button></div>
+      {submitError ? <p className="mt-4 text-center text-sm text-red-600">{submitError}</p> : null}
     </form>
   )
 }
 
 function SuccessState({ onReset }) {
-  return <div className="ds-card p-8 text-center sm:p-12"><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Development demo state</p><h2 className="mt-4 font-display text-4xl text-charcoal">Enquiry Received</h2><p className="mx-auto mt-5 max-w-xl leading-7 text-charcoal-soft">Thank you for sharing your project details. This demonstration currently stores the enquiry only in the browser interface. Backend submission will be connected in a later phase.</p><div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"><Button type="button" onClick={onReset}>Submit Another Enquiry</Button><Button as={Link} to="/" variant="secondary">Back to Home</Button></div></div>
+  return (
+    <div className="ds-card p-8 text-center sm:p-12">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Enquiry submitted</p>
+      <h2 className="mt-4 font-display text-4xl text-charcoal">Enquiry Received</h2>
+      <p className="mx-auto mt-5 max-w-xl leading-7 text-charcoal-soft">Thank you for sharing your project details. Your enquiry has been recorded by the server for review.</p>
+      <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        <Button type="button" onClick={onReset}>Submit Another Enquiry</Button>
+        <Button as={Link} to="/" variant="secondary">Back to Home</Button>
+      </div>
+    </div>
+  )
 }
 
 export default CustomOrderForm
